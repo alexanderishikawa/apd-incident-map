@@ -1,5 +1,49 @@
 ﻿# apd-incident-map
 
-Standalone APD public incident scrape → SQLite → Nominatim geocode → static MapLibre map.
+Scrape Austin PD’s public [Incident Reports](https://services.austintexas.gov/police/reports/alt_search.cfm) database into SQLite, geocode with Nominatim (recent-first), and publish a static MapLibre map with filters.
 
-See `docs/plans/designs/2026-07-17-apd-incident-map-design.md` and `docs/plans/2026-07-17-apd-incident-map.md`.
+**Source horizon:** ~18 months (CFM). Not a 3-year archive.
+
+## Setup
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\pip install -e ".[dev]"
+cd site
+npm install
+```
+
+## Commands
+
+```powershell
+# Last 7 offense-date days (idempotent upsert)
+.\.venv\Scripts\apd pull --last-days 7
+
+# Historical backfill (newest → oldest, resumable)
+.\.venv\Scripts\apd pull --historical
+
+# Geocode pending addresses (≤1 req/s; cache forever)
+.\.venv\Scripts\apd geocode --budget 300
+
+# Export site/public/data/{incidents,meta}.json
+.\.venv\Scripts\apd export
+
+# Map
+cd site
+npm run dev
+```
+
+Daily script: `scripts/daily.ps1` (or `scripts/daily.sh`).
+
+## Filters
+
+Offense types and ZIPs are built from **pulled data** (`meta.json`), not the outdated CFM offense dropdown.
+
+## Design / plan
+
+- `docs/plans/designs/2026-07-17-apd-incident-map-design.md`
+- `docs/plans/2026-07-17-apd-incident-map.md`
+
+## Nominatim
+
+Public Nominatim requires a descriptive User-Agent and ≤1 request/second. Results are cached in SQLite. Prefer recent incidents; historical geocoding only uses spare daily budget.

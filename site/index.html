@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APD Incident Map</title>
+    <link
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="panel">
+        <header>
+          <h1>APD Incidents</h1>
+          <p class="sub">Public incident reports · CFM source</p>
+        </header>
+        <form id="filters">
+          <label>
+            Offense from
+            <input type="date" id="dateFrom" />
+          </label>
+          <label>
+            Offense to
+            <input type="date" id="dateTo" />
+          </label>
+          <label>
+            Offenses
+            <select id="offenses" multiple size="8"></select>
+          </label>
+          <label>
+            ZIP
+            <select id="zips" multiple size="6"></select>
+          </label>
+          <label>
+            Zone
+            <select id="zones" multiple size="4"></select>
+          </label>
+          <label>
+            Area command
+            <select id="areas" multiple size="4"></select>
+          </label>
+          <label>
+            Search
+            <input type="search" id="q" placeholder="Address or case #" />
+          </label>
+          <label class="check">
+            <input type="checkbox" id="showUngeocoded" checked />
+            List ungeocoded matches
+          </label>
+          <button type="button" id="reset">Reset filters</button>
+        </form>
+        <div id="stats"></div>
+        <ul id="ungeocoded"></ul>
+      </aside>
+      <div id="map"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

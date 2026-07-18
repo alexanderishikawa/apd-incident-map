@@ -1,0 +1,17 @@
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+site/dist/
+site/node_modules/
+site/public/data/incidents.json.gz
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.env
+.DS_Store
+*.egg-info/
+dist/
+build/
