@@ -38,6 +38,10 @@ npm run dev
 
 Daily script: `scripts/daily.ps1` (or `scripts/daily.sh`).
 
+Geocode backlog chunks (laptop or Cursor Cloud): `scripts/geocode_backfill.sh`  
+`GEOCODE_BUDGET=2000 GEOCODE_RETRY_FAILS=1 APD_GIT_PUSH=1 ./scripts/geocode_backfill.sh`  
+(~51k unique addresses ≈ many ~30–40 min chunks at 1 req/s; progress persists via committed export.)
+
 ## Filters
 
 Offense types and ZIPs are built from **pulled data** (`meta.json`), not the outdated CFM offense dropdown.
