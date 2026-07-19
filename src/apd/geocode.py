@@ -16,7 +16,12 @@ _BLOCK = re.compile(r"\bBLOCK\b", re.I)
 _IH = re.compile(r"\bIH\s*(\d+)\b", re.I)
 _US_HWY = re.compile(r"\bUS\s*(\d+)\s*HWY\b", re.I)
 _EXPY = re.compile(r"\bEXPY\b", re.I)
-_UNINCORP_TRAVIS = re.compile(r"UNINCORP(?:ORATED)?\s+TRAVIS", re.I)
+_UPPER_DECK = re.compile(r"\bUPPER\s+DECK\b", re.I)
+_FM_RD = re.compile(r"\b(FM\s+\d+)\s+RD\b", re.I)
+_HOUSE_LETTER = re.compile(r"^(\d+)[A-Z]\b", re.I)
+_MC_SPACE = re.compile(r"\bMC\s+([A-Za-z]+)", re.I)
+_UNINCORP_COUNTY = re.compile(r"UNINCORP(?:ORATED)?\s+([A-Za-z]+)", re.I)
+_JUNK_STREET = re.compile(r"^(UNKNOWN|UNK)$", re.I)
 
 
 def address_key(incident: dict[str, Any]) -> str | None:
@@ -37,18 +42,28 @@ def normalize_key(key: str) -> str:
     return re.sub(r"\s+", " ", key).strip().upper()
 
 
+def _mc_collapse(match: re.Match[str]) -> str:
+    rest = match.group(1)
+    return "Mc" + rest[:1].upper() + rest[1:].lower()
+
+
 def _clean_street(street: str) -> str:
     s = _BLOCK.sub("", street)
     s = _DIR_TOKEN.sub("", s)
+    s = _UPPER_DECK.sub("", s)
+    s = _HOUSE_LETTER.sub(r"\1", s)
+    s = _FM_RD.sub(r"\1", s)
     s = _IH.sub(r"I-\1", s)
     s = _US_HWY.sub(r"US Highway \1", s)
     s = _EXPY.sub("Expressway", s)
+    s = _MC_SPACE.sub(_mc_collapse, s)
     return re.sub(r"\s+", " ", s).strip(" ,")
 
 
 def _clean_city(city: str) -> str:
-    if _UNINCORP_TRAVIS.search(city):
-        return "Travis County"
+    m = _UNINCORP_COUNTY.search(city)
+    if m:
+        return f"{m.group(1).title()} County"
     return city.strip()
 
 
@@ -66,7 +81,7 @@ def nominatim_candidates(key: str) -> list[str]:
     if not parts:
         return []
     street = parts[0]
-    if not street or street.upper() == "UNKNOWN":
+    if not street or _JUNK_STREET.match(street.strip()):
         return []
 
     # ..., city, [zip,] TX
@@ -91,28 +106,30 @@ def nominatim_candidates(key: str) -> list[str]:
     cleaned_street = (
         " and ".join(cleaned_legs) if had_slash else cleaned_legs[0]
     )
-    # Also emit spaced-and form only when slash; for non-slash cleaned_street is single leg
 
     out: list[str] = []
+    cities = [city]
+    # FM routes outside city limits often resolve better with county bias
+    if re.search(r"\bFM\s+\d+", cleaned_street, re.I) and city.upper() == "AUSTIN":
+        if "Travis County" not in cities:
+            cities.append("Travis County")
 
-    def add(street_part: str, use_zip: bool) -> None:
+    def add(street_part: str, use_zip: bool, city_name: str) -> None:
         if not street_part:
             return
-        q = _compose(street_part, city, zip_code if use_zip else None)
+        q = _compose(street_part, city_name, zip_code if use_zip else None)
         if q not in out:
             out.append(q)
 
-    if had_slash:
-        # Candidate A: cleaned with "and"
-        add(cleaned_street, True)
-        # Candidate B: first leg only
-        add(cleaned_legs[0], True)
-        # Drop-ZIP variants
-        add(cleaned_street, False)
-        add(cleaned_legs[0], False)
-    else:
-        add(cleaned_legs[0], True)
-        add(cleaned_legs[0], False)
+    for city_name in cities:
+        if had_slash:
+            add(cleaned_street, True, city_name)
+            add(cleaned_legs[0], True, city_name)
+            add(cleaned_street, False, city_name)
+            add(cleaned_legs[0], False, city_name)
+        else:
+            add(cleaned_legs[0], True, city_name)
+            add(cleaned_legs[0], False, city_name)
 
     return out
 

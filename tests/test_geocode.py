@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 
@@ -21,8 +23,6 @@ def test_svrd_and_dir_stripped():
 
 
 def re_search_dir_token(upper: str) -> bool:
-    import re
-
     return bool(re.search(r"\b(NB|SB|EB|WB)\b", upper))
 
 
@@ -39,11 +39,43 @@ def test_intersection_fallbacks():
 
 def test_unknown_skips_http_candidates():
     assert nominatim_candidates("UNKNOWN, Austin, TX") == []
+    assert nominatim_candidates("UNK, Austin, TX") == []
 
 
 def test_ih_normalized():
     cands = nominatim_candidates("2723 S IH 35 SVRD NB, AUSTIN, 78741, TX")
     assert any("I-35" in c for c in cands)
+
+
+def test_mc_space_collapsed():
+    cands = nominatim_candidates("6306 MC NEIL DR, AUSTIN, 78729, TX")
+    assert any("McNeil" in c for c in cands)
+    assert "MC NEIL" not in cands[0].upper()
+
+
+def test_unincorp_hays_county():
+    cands = nominatim_candidates("15701 FM 1826 RD, UNINCORP HAYS, 78737, TX")
+    assert "Hays County" in cands[0]
+    assert "FM 1826" in cands[0]
+    assert " RD," not in cands[0] and not cands[0].startswith("RD")
+
+
+def test_upper_deck_stripped():
+    cands = nominatim_candidates("4124 N IH 35 UPPER DECK SB, AUSTIN, 78705, TX")
+    assert all("UPPER" not in c.upper() for c in cands)
+    assert any("I-35" in c for c in cands)
+
+
+def test_house_number_letter_stripped():
+    cands = nominatim_candidates("2000K E ANDERSON LN SVRD WB, AUSTIN, 78754, TX")
+    assert cands[0].startswith("2000 E ANDERSON")
+
+
+def test_fm_adds_travis_county_bias():
+    cands = nominatim_candidates("3003 S FM 973 RD, AUSTIN, 78617, TX")
+    assert any("Travis County" in c for c in cands)
+    assert any(re.search(r"FM 973,", c) for c in cands)
+
 
 
 def test_fallback_hit_on_third_candidate_counts_http(tmp_path):
