@@ -35,6 +35,11 @@ def main(argv: list[str] | None = None) -> int:
     p_geo = sub.add_parser("geocode", help="Geocode pending addresses (Nominatim)")
     p_geo.add_argument("--db", type=Path, default=_default_db())
     p_geo.add_argument("--budget", type=int, default=300)
+    p_geo.add_argument(
+        "--retry-fails",
+        action="store_true",
+        help="Re-attempt addresses previously cached as fail",
+    )
 
     p_exp = sub.add_parser("export", help="Export JSON for the static site")
     p_exp.add_argument("--db", type=Path, default=_default_db())
@@ -76,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         db = Database(args.db)
         geo = Geocoder(db)
         try:
-            stats = geo.run(budget=args.budget)
+            stats = geo.run(budget=args.budget, retry_fails=args.retry_fails)
         finally:
             geo.close()
             db.close()

@@ -25,6 +25,9 @@ npm install
 # Geocode pending addresses (≤1 req/s; cache forever)
 .\.venv\Scripts\apd geocode --budget 300
 
+# Re-try addresses previously marked fail (after normalizer improvements)
+.\.venv\Scripts\apd geocode --budget 300 --retry-fails
+
 # Export site/public/data/{incidents,meta}.json
 .\.venv\Scripts\apd export
 
@@ -43,7 +46,10 @@ Offense types and ZIPs are built from **pulled data** (`meta.json`), not the out
 
 - `docs/plans/designs/2026-07-17-apd-incident-map-design.md`
 - `docs/plans/2026-07-17-apd-incident-map.md`
+- `docs/plans/designs/2026-07-18-geocode-address-normalize-design.md`
 
 ## Nominatim
 
 Public Nominatim requires a descriptive User-Agent and ≤1 request/second. Results are cached in SQLite. Prefer recent incidents; historical geocoding only uses spare daily budget.
+
+APD location strings are normalized before lookup (drop `BLOCK` / `SVRD` / NB–WB, rewrite `IH`→`I-`, `UNINCORP TRAVIS`→Travis County). Intersections try `A and B`, then the first leg, then drop-ZIP variants. `--budget` counts Nominatim HTTP calls. Use `--retry-fails` once after normalizer changes so old misses are re-queued.

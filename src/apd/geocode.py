@@ -11,6 +11,13 @@ from apd.db import Database
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 DEFAULT_UA = "apd-incident-map/0.1 (research; contact via project README)"
 
+_DIR_TOKEN = re.compile(r"\b(?:SVRD|NB|SB|EB|WB)\b", re.I)
+_BLOCK = re.compile(r"\bBLOCK\b", re.I)
+_IH = re.compile(r"\bIH\s*(\d+)\b", re.I)
+_US_HWY = re.compile(r"\bUS\s*(\d+)\s*HWY\b", re.I)
+_EXPY = re.compile(r"\bEXPY\b", re.I)
+_UNINCORP_TRAVIS = re.compile(r"UNINCORP(?:ORATED)?\s+TRAVIS", re.I)
+
 
 def address_key(incident: dict[str, Any]) -> str | None:
     addr = (incident.get("address_raw") or "").strip()
@@ -28,6 +35,86 @@ def address_key(incident: dict[str, Any]) -> str | None:
 
 def normalize_key(key: str) -> str:
     return re.sub(r"\s+", " ", key).strip().upper()
+
+
+def _clean_street(street: str) -> str:
+    s = _BLOCK.sub("", street)
+    s = _DIR_TOKEN.sub("", s)
+    s = _IH.sub(r"I-\1", s)
+    s = _US_HWY.sub(r"US Highway \1", s)
+    s = _EXPY.sub("Expressway", s)
+    return re.sub(r"\s+", " ", s).strip(" ,")
+
+
+def _clean_city(city: str) -> str:
+    if _UNINCORP_TRAVIS.search(city):
+        return "Travis County"
+    return city.strip()
+
+
+def _compose(street: str, city: str, zip_code: str | None) -> str:
+    parts = [street, city]
+    if zip_code:
+        parts.append(zip_code)
+    parts.append("TX")
+    return re.sub(r"\s+", " ", ", ".join(parts)).strip()
+
+
+def nominatim_candidates(key: str) -> list[str]:
+    """Ordered Nominatim query strings for an APD address_key; empty = skip HTTP."""
+    parts = [p.strip() for p in key.split(",")]
+    if not parts:
+        return []
+    street = parts[0]
+    if not street or street.upper() == "UNKNOWN":
+        return []
+
+    # ..., city, [zip,] TX
+    tail = parts[1:]
+    if tail and tail[-1].upper() == "TX":
+        tail = tail[:-1]
+    zip_code: str | None = None
+    city = "Austin"
+    if len(tail) >= 2 and re.fullmatch(r"\d{5}(?:-\d{4})?", tail[-1] or ""):
+        zip_code = tail[-1]
+        city = ", ".join(tail[:-1]).strip() or city
+    elif tail:
+        city = ", ".join(tail).strip() or city
+
+    city = _clean_city(city)
+    had_slash = "/" in street
+    legs = [p.strip() for p in street.split("/")] if had_slash else [street]
+    cleaned_legs = [_clean_street(leg) for leg in legs if _clean_street(leg)]
+    if not cleaned_legs:
+        return []
+
+    cleaned_street = (
+        " and ".join(cleaned_legs) if had_slash else cleaned_legs[0]
+    )
+    # Also emit spaced-and form only when slash; for non-slash cleaned_street is single leg
+
+    out: list[str] = []
+
+    def add(street_part: str, use_zip: bool) -> None:
+        if not street_part:
+            return
+        q = _compose(street_part, city, zip_code if use_zip else None)
+        if q not in out:
+            out.append(q)
+
+    if had_slash:
+        # Candidate A: cleaned with "and"
+        add(cleaned_street, True)
+        # Candidate B: first leg only
+        add(cleaned_legs[0], True)
+        # Drop-ZIP variants
+        add(cleaned_street, False)
+        add(cleaned_legs[0], False)
+    else:
+        add(cleaned_legs[0], True)
+        add(cleaned_legs[0], False)
+
+    return out
 
 
 class Geocoder:
@@ -74,8 +161,8 @@ class Geocoder:
             return None
         return float(data[0]["lat"]), float(data[0]["lon"])
 
-    def pending_keys(self) -> list[str]:
-        """Newest offense_datetime first; unique address keys without ok/fail cache."""
+    def pending_keys(self, retry_fails: bool = False) -> list[str]:
+        """Newest offense_datetime first; unique keys without ok (and fail unless retry)."""
         seen: set[str] = set()
         ordered: list[str] = []
         for row in self.db.all_incidents():
@@ -86,32 +173,57 @@ class Geocoder:
             if nk in seen:
                 continue
             cached = self.db.get_geocode(key)
-            if cached and cached["status"] in {"ok", "fail"}:
-                continue
+            if cached:
+                if cached["status"] == "ok":
+                    continue
+                if cached["status"] == "fail" and not retry_fails:
+                    continue
             seen.add(nk)
             ordered.append(key)
         return ordered
 
-    def run(self, budget: int = 300) -> dict[str, int]:
-        pending = self.pending_keys()
+    def run(self, budget: int = 300, retry_fails: bool = False) -> dict[str, int]:
+        pending = self.pending_keys(retry_fails=retry_fails)
         stats = {"attempted": 0, "ok": 0, "fail": 0, "skipped_cached": 0}
         for key in pending:
             if stats["attempted"] >= budget:
                 break
             cached = self.db.get_geocode(key)
-            if cached and cached["status"] in {"ok", "fail"}:
+            if cached and cached["status"] == "ok":
                 stats["skipped_cached"] += 1
                 continue
-            stats["attempted"] += 1
-            try:
-                coords = self.lookup_nominatim(key)
-            except Exception:
+            if cached and cached["status"] == "fail" and not retry_fails:
+                stats["skipped_cached"] += 1
+                continue
+
+            cands = nominatim_candidates(key)
+            if not cands:
                 self.db.upsert_geocode(key, status="fail")
                 stats["fail"] += 1
                 continue
+
+            coords: tuple[float, float] | None = None
+            stopped_early = False
+            for query in cands:
+                if stats["attempted"] >= budget:
+                    stopped_early = True
+                    break
+                stats["attempted"] += 1
+                try:
+                    coords = self.lookup_nominatim(query)
+                except Exception:
+                    coords = None
+                    continue
+                if coords:
+                    break
+
             if coords:
-                self.db.upsert_geocode(key, status="ok", lat=coords[0], lon=coords[1])
+                self.db.upsert_geocode(
+                    key, status="ok", lat=coords[0], lon=coords[1]
+                )
                 stats["ok"] += 1
+            elif stopped_early:
+                break
             else:
                 self.db.upsert_geocode(key, status="fail")
                 stats["fail"] += 1
