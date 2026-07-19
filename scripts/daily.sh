@@ -9,6 +9,7 @@ fi
 source .venv/bin/activate
 pip install -q -e ".[dev]"
 
+apd seed
 apd pull --last-days 7
 apd geocode --budget 300
 apd export

@@ -10,6 +10,7 @@ from apd.db import Database
 from apd.export import export_site_data
 from apd.geocode import Geocoder
 from apd.pull import pull_historical, pull_last_days
+from apd.seed import seed_from_export
 
 
 def _default_db() -> Path:
@@ -38,6 +39,18 @@ def main(argv: list[str] | None = None) -> int:
     p_exp = sub.add_parser("export", help="Export JSON for the static site")
     p_exp.add_argument("--db", type=Path, default=_default_db())
     p_exp.add_argument("--out", type=Path, default=_default_export())
+
+    p_seed = sub.add_parser(
+        "seed",
+        help="Load site/public/data/incidents.json into SQLite (noop if DB nonempty)",
+    )
+    p_seed.add_argument("--db", type=Path, default=_default_db())
+    p_seed.add_argument("--data", type=Path, default=_default_export())
+    p_seed.add_argument(
+        "--force",
+        action="store_true",
+        help="Seed even if DB already has rows",
+    )
 
     args = parser.parse_args(argv)
 
@@ -75,6 +88,15 @@ def main(argv: list[str] | None = None) -> int:
         meta = export_site_data(db, args.out)
         db.close()
         print(json.dumps(meta, indent=2))
+        return 0
+
+    if args.cmd == "seed":
+        db = Database(args.db)
+        stats = seed_from_export(
+            db, args.data, skip_if_nonempty=not args.force
+        )
+        db.close()
+        print(json.dumps(stats, indent=2))
         return 0
 
     return 1
