@@ -9,6 +9,9 @@ import httpx
 from apd.db import Database
 
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
+AUSTIN_ADDRESSES = (
+    "https://maps.austintexas.gov/arcgis/rest/services/Shared/Property/MapServer/0/query"
+)
 DEFAULT_UA = "apd-incident-map/0.1 (research; contact via project README)"
 
 _DIR_TOKEN = re.compile(r"\b(?:SVRD|NB|SB|EB|WB)\b", re.I)
@@ -21,7 +24,7 @@ _FM_RD = re.compile(r"\b(FM\s+\d+)\s+RD\b", re.I)
 _HOUSE_LETTER = re.compile(r"^(\d+)[A-Z]\b", re.I)
 _MC_SPACE = re.compile(r"\bMC\s+([A-Za-z]+)", re.I)
 _UNINCORP_COUNTY = re.compile(r"UNINCORP(?:ORATED)?\s+([A-Za-z]+)", re.I)
-_JUNK_STREET = re.compile(r"^(UNKNOWN|UNK)$", re.I)
+_JUNK_STREET = re.compile(r"^(UNKNOWN|UNK|UNKNOWN ADDRESS)$", re.I)
 
 
 def address_key(incident: dict[str, Any]) -> str | None:
@@ -134,6 +137,35 @@ def nominatim_candidates(key: str) -> list[str]:
     return out
 
 
+def austin_street_queries(key: str) -> list[str]:
+    """APD-dialect street strings for Austin address-point lookup (keep SVRD/NB/etc)."""
+    parts = [p.strip() for p in key.split(",")]
+    if not parts:
+        return []
+    street = parts[0]
+    if not street or _JUNK_STREET.match(street.strip()):
+        return []
+
+    out: list[str] = []
+
+    def add(s: str) -> None:
+        s = re.sub(r"\s+", " ", s).strip(" ,")
+        if s and s not in out:
+            out.append(s)
+
+    if "/" in street:
+        for leg in street.split("/"):
+            leg = _BLOCK.sub("", leg.strip())
+            leg = re.sub(r"\s+", " ", leg).strip(" ,")
+            if re.match(r"^\d+", leg):
+                add(leg)
+        return out
+
+    # Keep APD highway dialect; only drop BLOCK (Austin FULL_STREET_NAME matches APD)
+    add(_BLOCK.sub("", street))
+    return out
+
+
 class Geocoder:
     def __init__(
         self,
@@ -178,6 +210,31 @@ class Geocoder:
             return None
         return float(data[0]["lat"]), float(data[0]["lon"])
 
+    def lookup_austin_gis(self, street: str) -> tuple[float, float] | None:
+        """Exact FULL_STREET_NAME match against City of Austin address points (WGS84)."""
+        self._throttle()
+        lit = street.replace("'", "''")
+        r = self.client.get(
+            AUSTIN_ADDRESSES,
+            params={
+                "where": f"FULL_STREET_NAME='{lit}'",
+                "outFields": "FULL_STREET_NAME",
+                "returnGeometry": "true",
+                "outSR": "4326",
+                "f": "json",
+                "resultRecordCount": "1",
+            },
+        )
+        r.raise_for_status()
+        data = r.json()
+        feats = data.get("features") or []
+        if not feats:
+            return None
+        geom = feats[0].get("geometry") or {}
+        if "x" not in geom or "y" not in geom:
+            return None
+        return float(geom["y"]), float(geom["x"])
+
     def pending_keys(self, retry_fails: bool = False) -> list[str]:
         """Newest offense_datetime first; unique keys without ok (and fail unless retry)."""
         seen: set[str] = set()
@@ -201,7 +258,13 @@ class Geocoder:
 
     def run(self, budget: int = 300, retry_fails: bool = False) -> dict[str, int]:
         pending = self.pending_keys(retry_fails=retry_fails)
-        stats = {"attempted": 0, "ok": 0, "fail": 0, "skipped_cached": 0}
+        stats = {
+            "attempted": 0,
+            "ok": 0,
+            "fail": 0,
+            "skipped_cached": 0,
+            "ok_austin": 0,
+        }
         for key in pending:
             if stats["attempted"] >= budget:
                 break
@@ -214,31 +277,84 @@ class Geocoder:
                 continue
 
             cands = nominatim_candidates(key)
-            if not cands:
+            austin_qs = austin_street_queries(key)
+            if not cands and not austin_qs:
                 self.db.upsert_geocode(key, status="fail")
                 stats["fail"] += 1
                 continue
 
             coords: tuple[float, float] | None = None
+            provider = "nominatim"
             stopped_early = False
-            for query in cands:
-                if stats["attempted"] >= budget:
-                    stopped_early = True
-                    break
-                stats["attempted"] += 1
-                try:
-                    coords = self.lookup_nominatim(query)
-                except Exception:
-                    coords = None
-                    continue
+            # Austin GIS matches APD highway dialect (SVRD/IH/US HWY); try it first there.
+            street0 = key.split(",", 1)[0]
+            austin_first = bool(
+                austin_qs
+                and re.search(
+                    r"\b(?:SVRD|IH\s*\d|US\s*\d+\s*HWY|HALF\s+ST)\b",
+                    street0,
+                    re.I,
+                )
+            )
+
+            def try_austin() -> tuple[float, float] | None:
+                nonlocal stopped_early
+                for street in austin_qs:
+                    if stats["attempted"] >= budget:
+                        stopped_early = True
+                        return None
+                    stats["attempted"] += 1
+                    try:
+                        hit = self.lookup_austin_gis(street)
+                    except Exception:
+                        continue
+                    if hit:
+                        return hit
+                return None
+
+            def try_nominatim() -> tuple[float, float] | None:
+                nonlocal stopped_early
+                for query in cands:
+                    if stats["attempted"] >= budget:
+                        stopped_early = True
+                        return None
+                    stats["attempted"] += 1
+                    try:
+                        hit = self.lookup_nominatim(query)
+                    except Exception:
+                        continue
+                    if hit:
+                        return hit
+                return None
+
+            if austin_first:
+                coords = try_austin()
                 if coords:
-                    break
+                    provider = "austin_gis"
+                elif not stopped_early:
+                    coords = try_nominatim()
+                    if coords:
+                        provider = "nominatim"
+            else:
+                coords = try_nominatim()
+                if coords:
+                    provider = "nominatim"
+                elif not stopped_early:
+                    coords = try_austin()
+                    if coords:
+                        provider = "austin_gis"
 
             if coords:
                 self.db.upsert_geocode(
-                    key, status="ok", lat=coords[0], lon=coords[1]
+                    key,
+                    status="ok",
+                    lat=coords[0],
+                    lon=coords[1],
+                    provider=provider,
                 )
                 stats["ok"] += 1
+                if provider == "austin_gis":
+                    stats["ok_austin"] += 1
             elif stopped_early:
                 break
             else:

@@ -56,4 +56,6 @@ Offense types and ZIPs are built from **pulled data** (`meta.json`), not the out
 
 Public Nominatim requires a descriptive User-Agent and ≤1 request/second. Results are cached in SQLite. Prefer recent incidents; historical geocoding only uses spare daily budget.
 
-APD location strings are normalized before lookup (drop `BLOCK` / `SVRD` / NB–WB / `UPPER DECK`, rewrite `IH`→`I-`, `MC NEIL`→`McNeil`, house-number letter suffixes, `FM n RD`→`FM n`, `UNINCORP …`→`… County`). Intersections try `A and B`, then the first leg, then drop-ZIP variants; FM addresses in Austin also try Travis County. `--budget` counts Nominatim HTTP calls. Use `--retry-fails` after normalizer changes so old misses are re-queued.
+APD location strings are normalized before Nominatim lookup (drop `BLOCK` / `SVRD` / NB–WB / `UPPER DECK`, rewrite `IH`→`I-`, `MC NEIL`→`McNeil`, house-number letter suffixes, `FM n RD`→`FM n`, `UNINCORP …`→`… County`). Intersections try `A and B`, then the first leg, then drop-ZIP variants; FM addresses in Austin also try Travis County.
+
+If Nominatim misses, fall back to **City of Austin address points** (`FULL_STREET_NAME` exact match — keeps APD `SVRD`/`NB` dialect). Hits are cached with `provider=austin_gis`. `--budget` counts all HTTP geocode calls. Use `--retry-fails` after normalizer/fallback changes so old misses are re-queued.

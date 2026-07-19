@@ -6,7 +6,12 @@ import httpx
 import pytest
 
 from apd.db import Database
-from apd.geocode import Geocoder, address_key, nominatim_candidates
+from apd.geocode import (
+    Geocoder,
+    address_key,
+    austin_street_queries,
+    nominatim_candidates,
+)
 from helpers import sample_incident
 
 
@@ -151,7 +156,10 @@ def test_unknown_fails_without_http(tmp_path):
 
 def test_all_candidates_miss_marks_fail(tmp_path):
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=[])
+        if "openstreetmap.org" in str(request.url):
+            return httpx.Response(200, json=[])
+        # Austin empty feature set
+        return httpx.Response(200, json={"features": []})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     db = Database(tmp_path / "t.sqlite")
@@ -166,11 +174,105 @@ def test_all_candidates_miss_marks_fail(tmp_path):
     geo = Geocoder(db, client=client, min_interval=0)
     stats = geo.run(budget=10)
     assert stats["fail"] == 1
-    assert stats["attempted"] >= 1
+    # Nominatim candidates + Austin fallback
+    assert stats["attempted"] >= 2
     key = "500 BLOCK W 29TH ST, AUSTIN, 78705, TX"
     assert db.get_geocode(key)["status"] == "fail"
     geo.close()
     db.close()
+
+
+def test_austin_street_queries_keep_svrd():
+    qs = austin_street_queries("2723 S IH 35 SVRD NB, AUSTIN, 78741, TX")
+    assert qs == ["2723 S IH 35 SVRD NB"]
+    qs2 = austin_street_queries("500 BLOCK W 29TH ST, AUSTIN, 78705, TX")
+    assert qs2 == ["500 W 29TH ST"]
+
+
+def test_austin_gis_first_for_highway_dialect(tmp_path):
+    key = "2723 S IH 35 SVRD NB, AUSTIN, 78741, TX"
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        calls.append(url)
+        if "openstreetmap.org" in url:
+            raise AssertionError("Nominatim should not run when Austin hits first")
+        where = request.url.params.get("where", "")
+        assert "2723 S IH 35 SVRD NB" in where
+        return httpx.Response(
+            200,
+            json={
+                "features": [
+                    {
+                        "attributes": {"FULL_STREET_NAME": "2723 S IH 35 SVRD NB"},
+                        "geometry": {"x": -97.74, "y": 30.22},
+                    }
+                ]
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    db = Database(tmp_path / "t.sqlite")
+    db.upsert_incident(
+        sample_incident(
+            case_number="2026-GEO-AUS",
+            address_raw="2723 S IH 35 SVRD NB",
+            city="AUSTIN",
+            zip="78741",
+        )
+    )
+    geo = Geocoder(db, client=client, min_interval=0)
+    stats = geo.run(budget=20)
+    assert stats["ok"] == 1
+    assert stats["ok_austin"] == 1
+    assert stats["attempted"] == 1
+    cached = db.get_geocode(key)
+    assert cached["status"] == "ok"
+    assert cached["provider"] == "austin_gis"
+    assert cached["lat"] == pytest.approx(30.22)
+    assert any("austintexas.gov" in u for u in calls)
+    geo.close()
+    db.close()
+
+
+def test_austin_gis_fallback_after_nominatim_miss(tmp_path):
+    """Non-highway miss → Nominatim first, then Austin."""
+    key = "8005 LADERA VERDE DR, AUSTIN, 78739, TX"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "openstreetmap.org" in str(request.url):
+            return httpx.Response(200, json=[])
+        return httpx.Response(
+            200,
+            json={
+                "features": [
+                    {
+                        "attributes": {"FULL_STREET_NAME": "8005 LADERA VERDE DR"},
+                        "geometry": {"x": -97.88, "y": 30.19},
+                    }
+                ]
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    db = Database(tmp_path / "t.sqlite")
+    db.upsert_incident(
+        sample_incident(
+            case_number="2026-GEO-AUS2",
+            address_raw="8005 LADERA VERDE DR",
+            city="AUSTIN",
+            zip="78739",
+        )
+    )
+    geo = Geocoder(db, client=client, min_interval=0)
+    stats = geo.run(budget=20)
+    assert stats["ok"] == 1
+    assert stats["ok_austin"] == 1
+    assert db.get_geocode(key)["provider"] == "austin_gis"
+    geo.close()
+    db.close()
+
 
 
 def test_retry_fails_requeues(tmp_path):
