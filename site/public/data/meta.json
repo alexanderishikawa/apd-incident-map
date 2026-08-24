@@ -1,7 +1,7 @@
 {
-  "last_pulled_at": "2026-08-23T17:00:24+00:00",
-  "count": 188353,
-  "geocoded_count": 185127,
+  "last_pulled_at": "2026-08-24T17:00:24+00:00",
+  "count": 188638,
+  "geocoded_count": 185410,
   "offenses": [
     "68A INSPECTION",
     "ABANDONED BICYCLES/PARTS",
@@ -440,6 +440,7 @@
     "PAROLE VIOL",
     "PEDESTRIAN ON ROADWAY",
     "PERJURY",
+    "PERSON DOWN",
     "PICK UP ITEM/EVIDENCE",
     "POCKET PICKING",
     "POSS CONTROLLED SUB/NARCOTIC",
