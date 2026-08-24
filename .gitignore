@@ -3,7 +3,7 @@ data/*.sqlite-*
 data/*.db
 site/dist/
 site/node_modules/
-site/public/data/incidents.json.gz
+site/public/data/incidents.json
 .venv/
 venv/
 __pycache__/

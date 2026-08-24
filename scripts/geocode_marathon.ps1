@@ -33,7 +33,7 @@ for ($round = 1; $round -le $maxRounds; $round++) {
   }
 
   if ($env:APD_GIT_PUSH -eq "1") {
-    git add site/public/data/incidents.json site/public/data/meta.json
+    git add site/public/data/incidents.json.gz site/public/data/meta.json
     git diff --staged --quiet
     if ($LASTEXITCODE -ne 0) {
       git commit -m "data: geocode marathon round $round"

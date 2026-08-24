@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_seed = sub.add_parser(
         "seed",
-        help="Load site/public/data/incidents.json into SQLite (noop if DB nonempty)",
+        help="Load incidents.json or incidents.json.gz into SQLite (noop if DB nonempty)",
     )
     p_seed.add_argument("--db", type=Path, default=_default_db())
     p_seed.add_argument("--data", type=Path, default=_default_export())

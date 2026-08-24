@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 from typing import Any
@@ -68,9 +69,11 @@ def export_site_data(db: Database, out_dir: Path) -> dict[str, Any]:
     }
 
     incidents_path = out_dir / "incidents.json"
+    gz_path = out_dir / "incidents.json.gz"
     meta_path = out_dir / "meta.json"
-    incidents_path.write_text(
-        json.dumps(incidents_out, ensure_ascii=False), encoding="utf-8"
-    )
+    payload = json.dumps(incidents_out, ensure_ascii=False).encode("utf-8")
+    incidents_path.write_bytes(payload)
+    with gzip.open(gz_path, "wb") as f:
+        f.write(payload)
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta

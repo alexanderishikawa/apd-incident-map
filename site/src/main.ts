@@ -14,6 +14,15 @@ async function loadJson<T>(url: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+async function loadGzipJson<T>(url: string): Promise<T> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Failed to load ${url}: ${r.status}`);
+  if (!r.body) throw new Error(`No body for ${url}`);
+  const decompressed = r.body.pipeThrough(new DecompressionStream("gzip"));
+  const text = await new Response(decompressed).text();
+  return JSON.parse(text) as T;
+}
+
 function toGeoJSON(rows: Incident[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
@@ -59,7 +68,7 @@ async function main() {
 
   try {
     [incidents, meta] = await Promise.all([
-      loadJson<Incident[]>("./data/incidents.json"),
+      loadGzipJson<Incident[]>("./data/incidents.json.gz"),
       loadJson<Meta>("./data/meta.json"),
     ]);
   } catch (e) {

@@ -28,15 +28,17 @@ npm install
 # Re-try addresses previously marked fail (after normalizer improvements)
 .\.venv\Scripts\apd geocode --budget 300 --retry-fails
 
-# Export site/public/data/{incidents,meta}.json
+# Export site/public/data/incidents.json.gz + meta.json
 .\.venv\Scripts\apd export
 
-# Map
+# Map (http://localhost:5173)
 cd site
 npm run dev
 ```
 
-Daily script: `scripts/daily.ps1` (or `scripts/daily.sh`).
+Live map (GitHub Pages, after daily push): https://alexanderishikawa.github.io/apd-incident-map/
+
+Daily script: `scripts/daily.ps1` (or `scripts/daily.sh`) — pull last 7 days, geocode budget 300, export, commit/push gzipped data so Pages rebuilds.
 
 Geocode backlog chunks (laptop or Cursor Cloud): `scripts/geocode_backfill.sh`  
 `GEOCODE_BUDGET=2000 GEOCODE_RETRY_FAILS=1 APD_GIT_PUSH=1 ./scripts/geocode_backfill.sh`  
@@ -51,6 +53,7 @@ Offense types and ZIPs are built from **pulled data** (`meta.json`), not the out
 - `docs/plans/designs/2026-07-17-apd-incident-map-design.md`
 - `docs/plans/2026-07-17-apd-incident-map.md`
 - `docs/plans/designs/2026-07-18-geocode-address-normalize-design.md`
+- `docs/plans/designs/2026-08-23-github-pages-gzip-design.md`
 
 ## Nominatim
 

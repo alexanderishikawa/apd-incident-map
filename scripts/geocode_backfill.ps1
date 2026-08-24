@@ -22,7 +22,7 @@ if ($retry) {
 Write-Host "Geocode chunk done (budget=$budget, retry_fails=$retry)."
 
 if ($env:APD_GIT_PUSH -eq "1") {
-  git add site/public/data/incidents.json site/public/data/meta.json
+  git add site/public/data/incidents.json.gz site/public/data/meta.json
   git diff --staged --quiet
   if ($LASTEXITCODE -ne 0) {
     git commit -m "data: geocode backfill (budget $budget)"

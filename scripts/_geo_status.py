@@ -17,7 +17,9 @@ n = c.execute(
 ok = cache.get("ok", 0)
 fail = cache.get("fail", 0)
 meta = json.loads((root / "site/public/data/meta.json").read_text(encoding="utf-8"))
-inc_path = root / "site/public/data/incidents.json"
+inc_path = root / "site/public/data/incidents.json.gz"
+if not inc_path.exists():
+    inc_path = root / "site/public/data/incidents.json"
 print("incidents", c.execute("select count(*) from incidents").fetchone()[0])
 print("cache", cache)
 print("distinct_addr", n)

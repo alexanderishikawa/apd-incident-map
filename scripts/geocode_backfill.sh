@@ -32,7 +32,7 @@ echo "Geocode chunk done (budget=${BUDGET}, retry_fails=${RETRY})."
 if [[ "${APD_GIT_PUSH:-0}" == "1" ]]; then
   git config user.email >/dev/null 2>&1 || git config user.email "apd-bot@users.noreply.github.com"
   git config user.name >/dev/null 2>&1 || git config user.name "apd-incident-map"
-  git add site/public/data/incidents.json site/public/data/meta.json
+  git add site/public/data/incidents.json.gz site/public/data/meta.json
   if git diff --staged --quiet; then
     echo "No data changes to commit."
   else

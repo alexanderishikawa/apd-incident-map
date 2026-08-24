@@ -1,3 +1,6 @@
+import gzip
+import json
+
 from apd.db import Database
 from apd.export import export_site_data
 from apd.geocode import address_key
@@ -18,5 +21,9 @@ def test_export_writes_meta_and_incidents(tmp_path):
     assert "MAIL THEFT" in meta["offenses"]
     assert "78704" in meta["zips"]
     assert (out / "incidents.json").exists()
+    assert (out / "incidents.json.gz").exists()
     assert (out / "meta.json").exists()
+    raw = json.loads((out / "incidents.json").read_text(encoding="utf-8"))
+    with gzip.open(out / "incidents.json.gz", "rt", encoding="utf-8") as f:
+        assert json.load(f) == raw
     db.close()

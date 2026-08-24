@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 from typing import Any
@@ -9,18 +10,28 @@ from apd.geocode import address_key
 from apd.parse import source_hash
 
 
+def _load_incidents(data_dir: Path) -> list[dict[str, Any]]:
+    json_path = data_dir / "incidents.json"
+    gz_path = data_dir / "incidents.json.gz"
+    if json_path.exists():
+        return json.loads(json_path.read_text(encoding="utf-8"))
+    if gz_path.exists():
+        with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    raise FileNotFoundError(f"Missing {json_path.name} and {gz_path.name} in {data_dir}")
+
+
 def seed_from_export(
     db: Database,
     data_dir: Path,
     *,
     skip_if_nonempty: bool = True,
 ) -> dict[str, int]:
-    """Load site/public/data/incidents.json into SQLite (for cloud/fresh checkouts)."""
+    """Load incidents.json or incidents.json.gz into SQLite (for cloud/fresh checkouts)."""
     if skip_if_nonempty and db.count_incidents() > 0:
         return {"incidents": db.count_incidents(), "seeded": 0, "geocodes": 0}
 
-    path = data_dir / "incidents.json"
-    rows: list[dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))
+    rows = _load_incidents(data_dir)
     seeded = 0
     geocodes = 0
     for row in rows:
