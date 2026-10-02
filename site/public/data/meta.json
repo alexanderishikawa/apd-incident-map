@@ -1,7 +1,7 @@
 {
-  "last_pulled_at": "2026-10-01T17:00:24+00:00",
-  "count": 200482,
-  "geocoded_count": 197017,
+  "last_pulled_at": "2026-10-02T19:48:17+00:00",
+  "count": 200801,
+  "geocoded_count": 196728,
   "offenses": [
     "68A INSPECTION",
     "ABANDONED BICYCLES/PARTS",
@@ -344,6 +344,7 @@
     "IMPOUNDED ANIMAL",
     "IMPOUNDED VEH",
     "IMPOUNDED VEH (ATTEMPTED)",
+    "IMPOUNDED VEH/PROP SALE",
     "IMPOUNDED/REPOSSED VEH NON-APD",
     "IN-SERVICE TRAINING/APD",
     "INCEST-PROHIBITED SEX CONDUCT",
