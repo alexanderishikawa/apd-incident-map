@@ -1,7 +1,7 @@
 {
-  "last_pulled_at": "2026-10-02T19:48:17+00:00",
-  "count": 200801,
-  "geocoded_count": 196728,
+  "last_pulled_at": "2026-10-03T17:00:24+00:00",
+  "count": 201155,
+  "geocoded_count": 197664,
   "offenses": [
     "68A INSPECTION",
     "ABANDONED BICYCLES/PARTS",
@@ -139,6 +139,7 @@
     "CITY TOWING PERMIT",
     "CIVIL DISTURBANCE/DEMO",
     "CIVILIAN INVOLVED INCIDENT",
+    "COLD CASE MISSING PERSON",
     "COLD CASE SEX CRIME INFORMATION",
     "COMMUNITY POLICE",
     "COMPELLING PROSTITUTION",
