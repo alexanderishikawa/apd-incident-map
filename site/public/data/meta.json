@@ -1,7 +1,7 @@
 {
-  "last_pulled_at": "2026-10-06T17:00:23+00:00",
-  "count": 201949,
-  "geocoded_count": 198450,
+  "last_pulled_at": "2026-10-07T21:00:15+00:00",
+  "count": 202435,
+  "geocoded_count": 198928,
   "offenses": [
     "68A INSPECTION",
     "ABANDONED BICYCLES/PARTS",
@@ -204,6 +204,7 @@
     "DEBIT CARD ABUSE",
     "DEBIT CARD ABUSE (ATTEMPTED)",
     "DECEASED PERSON",
+    "DECEASED PERSON (ATTEMPTED)",
     "DEL CONTROLLED SUB/NARCOTIC",
     "DEL CONTROLLED SUB/OTHER",
     "DEL CONTROLLED SUB/SYN NARC",
