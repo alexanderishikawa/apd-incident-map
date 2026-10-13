@@ -1,7 +1,7 @@
 {
-  "last_pulled_at": "2026-10-12T17:00:22+00:00",
-  "count": 203878,
-  "geocoded_count": 200335,
+  "last_pulled_at": "2026-10-13T19:02:02+00:00",
+  "count": 204128,
+  "geocoded_count": 200580,
   "offenses": [
     "68A INSPECTION",
     "ABANDONED BICYCLES/PARTS",
@@ -620,6 +620,7 @@
     "VIOL VEH REGISTRATION - OTHER",
     "VIOLENT CRIMES TASK FORCE",
     "VOCO - ALCOHOL CONSUMPTION",
+    "VOCO SOLICITATION PROHIBIT",
     "VOYEURISM-PEEPING TOM (CHILD ABUSE)",
     "VOYEURISM-PEEPING TOM (SEX CRIMES)",
     "WARRANT ARREST NON TRAFFIC",
